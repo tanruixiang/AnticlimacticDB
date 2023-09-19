@@ -1,0 +1,13 @@
+[package]
+name = "AnticlimacticDB"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+datafusion = "30.0.0"
+tokio = { version = "1.29", features = ["full"] }
+async-trait = "0.1.73"
+futures = "0.3.28"
+csv = "1.1.4"
