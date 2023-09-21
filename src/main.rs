@@ -252,6 +252,8 @@ impl RecordBatchStream for DoNothingReader {
     }
 }
 
+// You can learn how CeresDB customizes optimization rules by looking at
+// https://github.com/CeresDB/ceresdb/blob/main/query_engine/src/datafusion_impl/physical_optimizer/repartition.rs.
 struct DoNothingOptimizerRule {}
 impl OptimizerRule for DoNothingOptimizerRule {
     // Example rewrite pass to insert a user defined LogicalPlanNode
@@ -329,6 +331,10 @@ impl CustomDataSource {
         Ok(Arc::new(CustomExec::new(projections, schema, self.clone())))
     }
 }
+
+// You can learn how CeresDB uses TableProvider by looking at
+// https://github.com/CeresDB/ceresdb/blob/main/table_engine/src/provider.rs
+
 // Implement TableProvider trait, the focus is on the implementation of
 // the scan interface, which needs to return an ExecutionPlan
 #[async_trait]
@@ -478,6 +484,7 @@ async fn main() -> Result<()> {
     ctx.register_table(table_reference, table_provider).unwrap();
 
     // create and register udf
+    // You can see how CeresDB uses UDF by looking at https://github.com/CeresDB/ceresdb/blob/main/df_operator/src/udfs/time_bucket.rs.
     let udf = create_udf(
         "my_squre",
         vec![DataType::Float64],
