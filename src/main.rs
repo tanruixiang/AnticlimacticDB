@@ -466,8 +466,12 @@ impl ExecutionPlan for CustomExec {
 
 #[tokio::main(worker_threads = 1)]
 async fn main() -> Result<()> {
-    let sql =
-        "select DISTINCT c2, my_square(c2) as square from aggregate_test_100 order by square desc";
+    let table_name = "demo_table";
+
+    let sql = format!(
+        "select DISTINCT c2, my_square(c2) as square from {} order by square desc",
+        table_name
+    );
 
     // create local execution context
     let config = SessionConfig::new();
@@ -478,7 +482,7 @@ async fn main() -> Result<()> {
     let ctx = SessionContext::with_state(state);
 
     // register table
-    let table_reference = TableReference::from("aggregate_test_100");
+    let table_reference = TableReference::from(table_name);
     let table_provider = Arc::new(CustomDataSource::default());
     ctx.register_table(table_reference, table_provider).unwrap();
 
@@ -494,7 +498,7 @@ async fn main() -> Result<()> {
     ctx.register_udf(udf);
 
     // run the sql
-    let df = ctx.sql(sql).await.unwrap();
+    let df = ctx.sql(&sql).await.unwrap();
     df.show().await.unwrap();
 
     Ok(())
