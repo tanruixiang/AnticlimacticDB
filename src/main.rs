@@ -117,7 +117,7 @@ impl ExtensionPlanner for DoNothingPlanner {
         _session_state: &SessionState,
     ) -> Result<Option<Arc<dyn ExecutionPlan>>> {
         Ok(
-            if let Some(_) = node.as_any().downcast_ref::<DoNothingPlanNode>() {
+            if node.as_any().downcast_ref::<DoNothingPlanNode>().is_some() {
                 assert_eq!(logical_inputs.len(), 1, "Inconsistent number of inputs");
                 assert_eq!(physical_inputs.len(), 1, "Inconsistent number of inputs");
                 Some(Arc::new(DoNothingExec {
@@ -376,7 +376,7 @@ impl CustomExec {
     fn new(projections: Option<&Vec<usize>>, schema: SchemaRef, db: CustomDataSource) -> Self {
         Self {
             db,
-            projected_indexs: projections.clone().cloned(),
+            projected_indexs: projections.cloned(),
             csv_schema: schema,
         }
     }
@@ -439,7 +439,7 @@ impl ExecutionPlan for CustomExec {
             }
         }
         if let Some(indexs) = &self.projected_indexs {
-            combined_record_batch = combined_record_batch.project(&indexs).unwrap();
+            combined_record_batch = combined_record_batch.project(indexs).unwrap();
         }
         Ok(Box::pin(MemoryStream::try_new(
             vec![combined_record_batch],
