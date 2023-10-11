@@ -467,7 +467,7 @@ impl ExecutionPlan for CustomExec {
 #[tokio::main(worker_threads = 1)]
 async fn main() -> Result<()> {
     let sql =
-        "select  c2, my_square(c2) as square from aggregate_test_100 order by square desc limit 10";
+        "select DISTINCT c2, my_square(c2) as square from aggregate_test_100 order by square desc";
 
     // create local execution context
     let config = SessionConfig::new();
