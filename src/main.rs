@@ -1,60 +1,67 @@
-use std::any::Any;
-use std::fmt::{self, Debug, Formatter};
-use std::fs::File;
-use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll};
+use std::{
+    any::Any,
+    fmt::{self, Debug, Formatter},
+    fs::File,
+    sync::{Arc, Mutex},
+    task::{Context, Poll},
+};
 
 use async_trait::async_trait;
-use datafusion::arrow::array::{ArrayRef, Float64Array};
-use datafusion::arrow::compute::concat_batches;
-use datafusion::arrow::csv::ReaderBuilder;
-use datafusion::arrow::datatypes::{DataType, Field, Schema, SchemaRef};
-use datafusion::arrow::record_batch::RecordBatch;
-use datafusion::common::cast::as_float64_array;
-use datafusion::common::DFSchemaRef;
-use datafusion::datasource::TableProvider;
-use datafusion::error::Result;
-use datafusion::execution::context::{QueryPlanner, SessionState};
-use datafusion::execution::runtime_env::RuntimeEnv;
-use datafusion::execution::TaskContext;
-use datafusion::logical_expr::{
-    Extension, LogicalPlan, Projection, TableType, UserDefinedLogicalNode,
-    UserDefinedLogicalNodeCore, Volatility,
-};
 #[allow(unused_imports)]
 use datafusion::optimizer::{optimize_children, OptimizerConfig, OptimizerRule};
-use datafusion::physical_expr::PhysicalSortExpr;
-use datafusion::physical_plan::functions::make_scalar_function;
-use datafusion::physical_plan::memory::MemoryStream;
-use datafusion::physical_plan::{
-    project_schema, DisplayAs, DisplayFormatType, Distribution, ExecutionPlan, RecordBatchStream,
-    SendableRecordBatchStream,
+use datafusion::{
+    arrow::{
+        array::{ArrayRef, Int64Array},
+        compute::concat_batches,
+        csv::ReaderBuilder,
+        datatypes::{DataType, Field, Schema, SchemaRef},
+        record_batch::RecordBatch,
+    },
+    common::{cast::as_int64_array, DFSchemaRef},
+    datasource::TableProvider,
+    error::Result,
+    execution::{
+        context::{QueryPlanner, SessionState},
+        runtime_env::RuntimeEnv,
+        TaskContext,
+    },
+    logical_expr::{
+        Extension, LogicalPlan, Projection, TableType, UserDefinedLogicalNode,
+        UserDefinedLogicalNodeCore, Volatility,
+    },
+    physical_expr::PhysicalSortExpr,
+    physical_plan::{
+        functions::make_scalar_function, memory::MemoryStream, project_schema, DisplayAs,
+        DisplayFormatType, Distribution, ExecutionPlan, RecordBatchStream,
+        SendableRecordBatchStream,
+    },
+    physical_planner::{DefaultPhysicalPlanner, ExtensionPlanner, PhysicalPlanner},
+    prelude::*,
+    sql::TableReference,
 };
-use datafusion::physical_planner::{DefaultPhysicalPlanner, ExtensionPlanner, PhysicalPlanner};
-use datafusion::prelude::*;
-use datafusion::sql::TableReference;
 use futures::Stream;
 
 // This is the custom udf function body.
-pub fn my_squre(args: &[ArrayRef]) -> Result<ArrayRef> {
-    let tmp_arryas = as_float64_array(&args[0])?;
+pub fn my_square(args: &[ArrayRef]) -> Result<ArrayRef> {
+    let tmp_arryas = as_int64_array(&args[0])?;
     let new_array = tmp_arryas
         .iter()
         .map(|array_elem| array_elem.map(|value| value * value))
-        .collect::<Float64Array>();
+        .collect::<Int64Array>();
 
     Ok(Arc::new(new_array))
 }
 
-// This is the custom Logical Plan Node that will be used in the Logical Plan tree.
+// This is the custom Logical Plan Node that will be used in the Logical Plan
+// tree.
 #[derive(PartialEq, Eq, Hash, Debug)]
 struct DoNothingPlanNode {
     input: LogicalPlan,
 }
 
-// This is a customized Logical Plan Node that requires the implementation of the
-// UserDefinedLogicalNode trait, which for the developer's convenience is generally
-// only required to implement the UserDefinedLogicalNodeCore trait.
+// This is a customized Logical Plan Node that requires the implementation of
+// the UserDefinedLogicalNode trait, which for the developer's convenience is
+// generally only required to implement the UserDefinedLogicalNodeCore trait.
 impl UserDefinedLogicalNodeCore for DoNothingPlanNode {
     fn name(&self) -> &str {
         "DoNothingNode"
@@ -84,8 +91,9 @@ impl UserDefinedLogicalNodeCore for DoNothingPlanNode {
     }
 }
 
-// Customized QueryPlanner, the main logic is to add the ExtensionPlanner that we need to expand.
-// QueryPlanner is used to convert a Logical Plan into a Physical Plan.
+// Customized QueryPlanner, the main logic is to add the ExtensionPlanner that
+// we need to expand. QueryPlanner is used to convert a Logical Plan into a
+// Physical Plan.
 struct DoNothingQueryPlanner {}
 
 #[async_trait]
@@ -158,12 +166,15 @@ impl ExecutionPlan for DoNothingExec {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     /// ExecutionPlan's output schema
     fn schema(&self) -> SchemaRef {
         self.input.schema()
     }
+
     /// Define the output partition schema, which has three modes
-    /// 1. partitioning using round-robin algorithm, specify number of partitions
+    /// 1. partitioning using round-robin algorithm, specify number of
+    ///    partitions
     /// 2. partitioning using hashing, specify number of partitions
     /// 3. unknown partitioning method, specify number of partitions
     fn output_partitioning(&self) -> datafusion::physical_plan::Partitioning {
@@ -274,8 +285,8 @@ impl OptimizerRule for DoNothingOptimizerRule {
 
             return Ok(Some(new_projection));
         }
-        // This function can be used to optimize rules across the entire Logical plan tree
-        // optimize_children(self, plan, config)
+        // This function can be used to optimize rules across the entire Logical plan
+        // tree optimize_children(self, plan, config)
         Ok(Some(plan.clone()))
     }
 
@@ -456,7 +467,7 @@ impl ExecutionPlan for CustomExec {
 #[tokio::main(worker_threads = 1)]
 async fn main() -> Result<()> {
     let sql =
-        "select  c12, my_squre(c12) as squre from aggregate_test_100 order by squre desc limit 10";
+        "select  c2, my_square(c2) as square from aggregate_test_100 order by square desc limit 10";
 
     // create local execution context
     let config = SessionConfig::new();
@@ -474,11 +485,11 @@ async fn main() -> Result<()> {
     // create and register udf
     // You can see how CeresDB uses UDF by looking at https://github.com/CeresDB/ceresdb/blob/v1.2.7/df_operator/src/udfs/time_bucket.rs
     let udf = create_udf(
-        "my_squre",
-        vec![DataType::Float64],
-        Arc::new(DataType::Float64),
+        "my_square",
+        vec![DataType::Int64],
+        Arc::new(DataType::Int64),
         Volatility::Immutable,
-        make_scalar_function(my_squre),
+        make_scalar_function(my_square),
     );
     ctx.register_udf(udf);
 
