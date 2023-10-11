@@ -21,6 +21,7 @@ use datafusion::logical_expr::{
     Extension, LogicalPlan, Projection, TableType, UserDefinedLogicalNode,
     UserDefinedLogicalNodeCore, Volatility,
 };
+#[allow(unused_imports)]
 use datafusion::optimizer::{optimize_children, OptimizerConfig, OptimizerRule};
 use datafusion::physical_expr::PhysicalSortExpr;
 use datafusion::physical_plan::functions::make_scalar_function;
@@ -32,7 +33,7 @@ use datafusion::physical_plan::{
 use datafusion::physical_planner::{DefaultPhysicalPlanner, ExtensionPlanner, PhysicalPlanner};
 use datafusion::prelude::*;
 use datafusion::sql::TableReference;
-use futures::{Stream, StreamExt};
+use futures::Stream;
 
 // This is the custom udf function body.
 pub fn my_squre(args: &[ArrayRef]) -> Result<ArrayRef> {
@@ -206,7 +207,6 @@ impl ExecutionPlan for DoNothingExec {
 
         Ok(Box::pin(DoNothingReader {
             input: self.input.execute(partition, context)?,
-            done: false,
         }))
     }
 
@@ -219,7 +219,6 @@ impl ExecutionPlan for DoNothingExec {
 
 struct DoNothingReader {
     input: SendableRecordBatchStream,
-    done: bool,
 }
 
 impl Stream for DoNothingReader {
@@ -229,20 +228,8 @@ impl Stream for DoNothingReader {
         mut self: std::pin::Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Self::Item>> {
-        if self.done {
-            return Poll::Ready(None);
-        }
-        // take this as immutable
-        let poll = self.input.poll_next_unpin(cx);
-
-        match poll {
-            Poll::Ready(Some(Ok(batch))) => Poll::Ready(Some(Ok(batch))),
-            Poll::Ready(None) => {
-                self.done = true;
-                Poll::Ready(None)
-            }
-            other => other,
-        }
+        // you can modify here to add custom code
+        self.input.as_mut().poll_next(cx)
     }
 }
 
@@ -253,7 +240,7 @@ impl RecordBatchStream for DoNothingReader {
 }
 
 // You can learn how CeresDB customizes optimization rules by looking at
-// https://github.com/CeresDB/ceresdb/blob/main/query_engine/src/datafusion_impl/physical_optimizer/repartition.rs.
+// https://github.com/CeresDB/ceresdb/blob/v1.2.7/query_engine/src/datafusion_impl/physical_optimizer/repartition.rs
 struct DoNothingOptimizerRule {}
 impl OptimizerRule for DoNothingOptimizerRule {
     // Example rewrite pass to insert a user defined LogicalPlanNode
@@ -333,7 +320,7 @@ impl CustomDataSource {
 }
 
 // You can learn how CeresDB uses TableProvider by looking at
-// https://github.com/CeresDB/ceresdb/blob/main/table_engine/src/provider.rs
+// https://github.com/CeresDB/ceresdb/blob/v1.2.7/table_engine/src/provider.rs
 
 // Implement TableProvider trait, the focus is on the implementation of
 // the scan interface, which needs to return an ExecutionPlan
@@ -468,7 +455,8 @@ impl ExecutionPlan for CustomExec {
 
 #[tokio::main(worker_threads = 1)]
 async fn main() -> Result<()> {
-    let sql = "select  c12, my_squre(c12) from aggregate_test_100";
+    let sql =
+        "select  c12, my_squre(c12) as squre from aggregate_test_100 order by squre desc limit 10";
 
     // create local execution context
     let config = SessionConfig::new();
@@ -478,13 +466,13 @@ async fn main() -> Result<()> {
         .add_optimizer_rule(Arc::new(DoNothingOptimizerRule {}));
     let ctx = SessionContext::with_state(state);
 
-    // register table 
+    // register table
     let table_reference = TableReference::from("aggregate_test_100");
     let table_provider = Arc::new(CustomDataSource::default());
     ctx.register_table(table_reference, table_provider).unwrap();
 
     // create and register udf
-    // You can see how CeresDB uses UDF by looking at https://github.com/CeresDB/ceresdb/blob/main/df_operator/src/udfs/time_bucket.rs.
+    // You can see how CeresDB uses UDF by looking at https://github.com/CeresDB/ceresdb/blob/v1.2.7/df_operator/src/udfs/time_bucket.rs
     let udf = create_udf(
         "my_squre",
         vec![DataType::Float64],
