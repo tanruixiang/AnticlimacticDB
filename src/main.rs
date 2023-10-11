@@ -308,7 +308,7 @@ impl Default for CustomDataSource {
     fn default() -> Self {
         CustomDataSource {
             inner: Arc::new(Mutex::new(CustomDataSourceInner {
-                path: "./src/test.csv".into(),
+                path: "./resources/test.csv".into(),
             })),
         }
     }
